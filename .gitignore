@@ -6,3 +6,6 @@
 *.key
 
 /vendor/**/target/
+
+/vendor/shairplay/.cargo-ok
+/vendor/shairplay/.cargo_vcs_info.json
