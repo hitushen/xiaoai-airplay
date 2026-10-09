@@ -1,0 +1,8 @@
+/target/
+*.bak
+*.tmp
+.DS_Store
+.env
+*.key
+
+/vendor/**/target/

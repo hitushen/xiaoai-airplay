@@ -1,0 +1,37 @@
+# xiaoai-airplay AP2 + 语音自动压低配置
+name: XiaoAI AirPlay
+port: 5000
+password: ""
+hwaddr: "c2:46:38:ad:3e:25"
+device: Playback
+aplay_path: /usr/bin/aplay
+format: S16_LE
+mode: ap2
+pin: ""
+pairing_store: /data/open-xiaoai/airplay-pairing.json
+
+# 语音抢音时自动压低 AirPlay 音量（只缩放本程序输出的 PCM，不影响原生语音）
+duck:
+  enabled: true
+  gain: 0.2                      # 语音期间 AirPlay 音量系数（0.2 = 压到 20%）
+  poll_ms: 200
+  release_delay_ms: 1500         # 收到结束事件后延迟多久恢复
+  max_hold_ms: 60000             # 兜底：最长压低时间，防止卡住
+  log_files:
+    - /tmp/mico_aivs_lab/event.log
+    - /tmp/mico_aivs_lab/instruction.log
+    - /tmp/open-xiaoai/monitor.log
+  start_patterns:
+    - '"namespace":"SpeechWakeup"'
+    - '"name":"DuplexRecognizeStarted"'
+    - '唤醒词'
+  end_patterns:
+    - '"name":"Finish","namespace":"Dialog"'
+    - '"name":"ExitContinuousDialog"'
+
+# 播放时点亮音乐灯条（原生 mediaplayer 用 LED 14）
+led:
+  enabled: true
+  music_id: 14
+  show_command: /bin/show_led
+  shut_command: /bin/shut_led
