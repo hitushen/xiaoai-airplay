@@ -94,10 +94,57 @@ impl RaopShared {
     }
 
     fn kick_other_clients(&self, keep_ip: std::net::IpAddr) {
-        let senders = self.connections.lock().ok().map(|clients| clients.iter()
-            .filter(|(ip, _)| **ip != keep_ip)
-            .flat_map(|(_, by_id)| by_id.values().cloned()).collect::<Vec<_>>()).unwrap_or_default();
-        for tx in senders { let _ = tx.send(true); }
+        let senders = self
+            .connections
+            .lock()
+            .ok()
+            .map(|clients| connection_senders_to_kick(&clients, keep_ip))
+            .unwrap_or_default();
+        for tx in senders {
+            let _ = tx.send(true);
+        }
+    }
+}
+
+fn connection_senders_to_kick(
+    clients: &std::collections::HashMap<
+        std::net::IpAddr,
+        std::collections::HashMap<u64, watch::Sender<bool>>,
+    >,
+    keep_ip: std::net::IpAddr,
+) -> Vec<watch::Sender<bool>> {
+    clients
+        .iter()
+        .filter(|(ip, _)| **ip != keep_ip)
+        .flat_map(|(_, by_id)| by_id.values().cloned())
+        .collect()
+}
+
+#[cfg(test)]
+mod takeover_tests {
+    use super::*;
+
+    #[test]
+    fn takeover_preserves_parallel_current_sender_connections() {
+        let current_ip: std::net::IpAddr = "192.0.2.10".parse().unwrap();
+        let previous_ip: std::net::IpAddr = "192.0.2.20".parse().unwrap();
+        let (current_a, mut current_a_rx) = watch::channel(false);
+        let (current_b, mut current_b_rx) = watch::channel(false);
+        let (previous_a, mut previous_a_rx) = watch::channel(false);
+        let (previous_b, mut previous_b_rx) = watch::channel(false);
+        let clients = std::collections::HashMap::from([
+            (current_ip, std::collections::HashMap::from([(1, current_a), (2, current_b)])),
+            (previous_ip, std::collections::HashMap::from([(3, previous_a), (4, previous_b)])),
+        ]);
+
+        for sender in connection_senders_to_kick(&clients, current_ip) {
+            sender.send(true).unwrap();
+        }
+
+        assert!(!*current_a_rx.borrow_and_update());
+        assert!(!*current_b_rx.borrow_and_update());
+        assert!(*previous_a_rx.borrow_and_update());
+        assert!(*previous_b_rx.borrow_and_update());
     }
 }
 
