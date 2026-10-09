@@ -4,7 +4,7 @@
 
 ## 功能
 
-- AirPlay 1 / AirPlay 2 接收（当前默认配置为 AP2）。
+- AirPlay 1 / AirPlay 2 接收（当前默认配置优先 AP2；同一 RTSP listener 保留 AP1 兼容处理路径）。
 - AirPlay PCM 经过 `aplay -D default` 输出，保留小爱原生 `vis/ledd` 灯效链路。
 - 语音唤醒期间自动压低 AirPlay 音量，结束后恢复。
 - 新发送设备接管时，停止旧音频任务并**真正关闭旧设备的 RTSP 控制连接**，避免旧设备显示仍连接但没有声音。
@@ -41,6 +41,21 @@ cargo build --release
 ```
 
 `shairplay` 使用本地 vendor 路径，避免依赖上游源码状态漂移。项目本身不包含账号、密码、Token 或设备私钥。
+
+### OH2P ARMv7 构建
+
+OH2P 的运行时 glibc 较旧，不能直接把 macOS 上默认链接到新 glibc 的 ARMv7 二进制上传过去。部署构建使用 `cargo-zigbuild` 的 glibc 版本后缀，限制最高依赖为 glibc 2.25：
+
+```bash
+RUSTC=~/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustc \
+  ~/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/cargo zigbuild \
+  --release --target armv7-unknown-linux-gnueabihf.2.25
+
+strings target/armv7-unknown-linux-gnueabihf/release/xiaoai-airplay \
+  | grep -E '^GLIBC_[0-9]' | sort -u
+```
+
+上传前应确认输出中没有高于 `GLIBC_2.25` 的版本，并先备份音箱端原二进制。
 
 ## 音箱端部署
 
