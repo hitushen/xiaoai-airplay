@@ -338,10 +338,6 @@ pub(crate) fn handle_setup(
     let transport = request.header("Transport")?;
     tracing::debug!(transport, "AP1 SETUP");
 
-    // A valid audio SETUP is a takeover: close prior senders' RTSP connections,
-    // but preserve parallel connections from this same sender IP.
-    conn.shared.takeover_sender(conn.remote_socket.ip());
-
     // Check for DACP remote control headers
     if let (Some(dacp_id), Some(active_remote)) =
         (request.header("DACP-ID"), request.header("Active-Remote"))
@@ -378,6 +374,11 @@ pub(crate) fn handle_setup(
                 return None;
             }
         };
+
+        // Only take over after the new sender's RTP endpoint was created
+        // successfully. This avoids kicking a current sender on malformed or
+        // unsupported SETUP requests.
+        conn.shared.takeover_sender(conn.remote_socket.ip());
 
         let transport_resp = if use_udp {
             format!(
