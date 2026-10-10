@@ -9,6 +9,7 @@ format: S16_LE
 mode: ap2
 pin: ""
 pairing_store: /data/open-xiaoai/airplay-pairing.json
+reset_volume_on_session: true  # 新会话不继承上一台设备遗留的低音量
 
 # 语音抢音时自动压低 AirPlay 音量（只缩放本程序输出的 PCM，不影响原生语音）
 duck:

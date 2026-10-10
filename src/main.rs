@@ -38,6 +38,9 @@ struct Config {
     mode: String,
     pin: String,
     pairing_store: String,
+    /// 每次新的 AirPlay 音频流开始时先清除上一个发送端遗留的音量衰减。
+    /// 发送端随后会通过 SET_PARAMETER volume 下发自己的实际音量。
+    reset_volume_on_session: bool,
     led: LedConfig,
     duck: DuckConfig,
 }
@@ -55,6 +58,7 @@ impl Default for Config {
             mode: "ap2".to_string(),
             pin: String::new(),
             pairing_store: "/data/open-xiaoai/airplay-pairing.json".to_string(),
+            reset_volume_on_session: true,
             led: LedConfig::default(),
             duck: DuckConfig::default(),
         }
@@ -305,6 +309,10 @@ impl PlaybackState {
         self.volume_gain_bits
             .store(airplay_db_to_gain(volume).to_bits(), Ordering::Relaxed);
     }
+    fn reset_volume(&self) {
+        self.volume_gain_bits
+            .store(1.0f32.to_bits(), Ordering::Release);
+    }
     fn set_ducked(&self, d: bool) {
         if self.ducked.swap(d, Ordering::Relaxed) != d {
             info!(ducked = d, "AirPlay duck state changed");
@@ -522,6 +530,10 @@ impl AudioHandler for AplayHandler {
         info!(codec = ?format.codec, channels = format.channels, bits = format.bits,
               sample_rate = format.sample_rate, "AirPlay audio session init");
         let (previous, session_id) = self.state.session_started();
+        if self.config.reset_volume_on_session {
+            // 音量回调可能晚于 audio_init；先避免继承上一台发送端的低 dB。
+            self.state.reset_volume();
+        }
         if previous == 0 {
             self.led.apply(true); // 播放开始：点亮音乐灯条
         } else {
@@ -544,8 +556,8 @@ impl AudioHandler for AplayHandler {
         })
     }
     fn on_volume(&self, volume: f32) {
+        // 仅更新当前会话音量，不输出发送端音量诊断日志。
         self.state.set_volume_db(volume);
-        debug!(volume, "AirPlay volume changed");
     }
     fn on_client_connected(&self, addr: &str) {
         info!(addr, "AirPlay client connected");
@@ -696,6 +708,21 @@ mod tests {
 
         assert_eq!(state.session_ended(), 2);
         assert_eq!(state.session_ended(), 1);
+    }
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::*;
+
+    #[test]
+    fn new_session_volume_reset_clears_stale_sender_attenuation() {
+        let state = PlaybackState::new(0.2);
+        state.set_volume_db(-14.0);
+        assert!((state.gain() - 0.19952623).abs() < 0.0001);
+        assert!(state.gain() < 0.21);
+        state.reset_volume();
+        assert!((state.gain() - 1.0).abs() < f32::EPSILON);
     }
 }
 
